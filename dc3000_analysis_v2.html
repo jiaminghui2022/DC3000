@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC3000 侵染数据分析系统 (Pro版)</title>
+    <meta name="description" content="专为拟南芥 Pst DC3000 侵染实验设计的实验数据处理工具，支持原始数据保留、异常值自动剔除及 ANOVA 统计图表生成。">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --bg: #0f172a;
+            --glass: rgba(30, 41, 59, 0.7);
+            --border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --green: #10b981;
+            --red: #f43f5e;
+            --accent: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+
+        body {
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { max-width: 1000px; width: 100%; }
+
+        header { text-align: center; margin-bottom: 3rem; animation: fadeInDown 0.8s ease-out; }
+        header h1 {
+            font-size: 3rem; font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        header p { color: var(--text-dim); font-size: 1.1rem; }
+
+        .card {
+            background: var(--glass); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 24px; padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin-bottom: 2rem; transition: transform 0.3s ease;
+        }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr auto; gap: 1.5rem; align-items: end; }
+        .input-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .input-group label {
+            font-size: 0.9rem; color: var(--text-dim); font-weight: 500;
+            display: flex; align-items: center; gap: 0.4rem;
+        }
+
+        input, select {
+            background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border);
+            border-radius: 12px; padding: 0.8rem 1rem; color: white;
+            font-size: 1rem; outline: none; transition: all 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-glow); }
+        input.invalid { border-color: var(--red); box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.3); }
+        input.valid { border-color: var(--green); }
+        select option { background: var(--bg); color: white; }
+
+        button {
+            padding: 0.8rem 1.5rem; border-radius: 12px; border: none; cursor: pointer;
+            font-weight: 600; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -5px var(--primary-glow); }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-danger { background: transparent; border: 1px solid var(--red); color: var(--red); }
+        .btn-danger:hover { background: var(--red); color: white; }
+
+        .entry-section { margin-top: 2rem; animation: fadeInUp 0.5s ease-out; }
+        .genotype-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .genotype-title { font-size: 1.25rem; font-weight: 600; color: var(--accent); }
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-bottom: 1rem; min-width: 500px; }
+        th { text-align: left; padding: 0.5rem 1rem; color: var(--text-dim); font-weight: 500; font-size: 0.85rem; text-transform: uppercase; white-space: nowrap; }
+        td { padding: 1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-style: solid none; }
+        td:first-child { border-left: 1px solid var(--border); border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+        td:last-child { border-right: 1px solid var(--border); border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+        .dilution-input { width: 80px; padding: 0.5rem; background: rgba(0,0,0,0.2); }
+        .dilution-input.best-dilution { border-color: var(--green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.1); }
+
+        #results-section { display: none; }
+        .plot-container {
+            width: 100%; height: 450px; background: rgba(0,0,0,0.2); border-radius: 20px;
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+            border: 1px solid var(--border); padding: 1rem;
+        }
+        .btn-group { display: flex; gap: 1rem; margin-top: 2rem; justify-content: center; flex-wrap: wrap; }
+
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); border: 2px dashed var(--border); border-radius: 24px; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.8rem; font-weight: 600; background: var(--primary-glow); color: white; }
+
+        .summary-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; font-size: 0.9rem; }
+        .summary-table th { background: rgba(99, 102, 241, 0.15); color: var(--text-main); padding: 0.6rem 1rem; text-align: center; font-weight: 600; border-bottom: 2px solid var(--primary); white-space: nowrap; }
+        .summary-table td { text-align: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); background: transparent; border-radius: 0; }
+        .summary-table tr:hover td { background: rgba(255, 255, 255, 0.03); }
+        .summary-table .outlier-cell { color: var(--red); font-weight: 600; }
+
+        /* [新增] 自动保存提示条 */
+        .autosave-indicator {
+            position: fixed; top: 1rem; right: 1rem; padding: 0.4rem 0.8rem;
+            border-radius: 8px; font-size: 0.75rem; color: var(--text-dim);
+            background: rgba(30, 41, 59, 0.9); border: 1px solid var(--border);
+            display: flex; align-items: center; gap: 0.4rem; z-index: 100;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .autosave-indicator.visible { opacity: 1; }
+        .autosave-indicator .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+        /* [新增] 导出下拉菜单 */
+        .export-dropdown { position: relative; display: inline-block; }
+        .export-menu {
+            display: none; position: absolute; top: 100%; right: 0; margin-top: 0.5rem;
+            background: rgba(30, 41, 59, 0.95); border: 1px solid var(--border);
+            border-radius: 12px; padding: 0.5rem; min-width: 220px; z-index: 50;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+        .export-menu.show { display: block; animation: fadeInUp 0.2s ease-out; }
+        .export-menu-item {
+            display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem;
+            border-radius: 8px; cursor: pointer; color: var(--text-dim); font-size: 0.85rem;
+            border: none; background: none; width: 100%; text-align: left; font-weight: 500;
+            transition: all 0.15s;
+        }
+        .export-menu-item:hover { background: rgba(99, 102, 241, 0.15); color: var(--text-main); }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            header h1 { font-size: 1.8rem; }
+            .card { padding: 1.2rem; border-radius: 16px; }
+            .controls { grid-template-columns: 1fr; gap: 1rem; }
+            .settings-grid { grid-template-columns: 1fr !important; }
+            .settings-grid .input-group { grid-column: span 1 !important; }
+            .btn-group { flex-direction: column; align-items: stretch; }
+            .btn-group button { justify-content: center; }
+            .genotype-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+            .genotype-header .btn-group { margin-top: 0; flex-direction: row; flex-wrap: wrap; }
+            .plot-container { height: 350px; }
+            .protocol-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+            header h1 { font-size: 1.4rem; }
+            header p { font-size: 0.9rem; }
+            .dilution-input { width: 60px; padding: 0.4rem; font-size: 0.85rem; }
+            th, td { padding: 0.5rem; font-size: 0.85rem; }
+        }
+
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem; padding: 0.8rem 1.5rem;
+            border-radius: 12px; color: white; font-weight: 500; font-size: 0.9rem;
+            z-index: 9999; animation: toastIn 0.3s ease-out;
+            display: flex; align-items: center; gap: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        .toast.success { background: var(--green); }
+        .toast.error { background: var(--red); }
+        .toast.info { background: var(--primary); }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
+    </style>
+</head>
+<body>
+
+<!-- [新增] 自动保存提示 -->
+<div class="autosave-indicator" id="autosave-indicator">
+    <span class="dot"></span> 数据已自动保存
+</div>
+
+<div class="container">
+    <header>
+        <h1>DC3000 侵染数据分析系统</h1>
+        <p>拟南芥侵染实验数据自动化处理、异常值剔除与 ANOVA 统计分析</p>
+    </header>
+
+    <!-- Experimental Guide -->
+    <div class="card" style="background: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.2);">
+        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+            <i data-lucide="info" style="color: var(--primary); shrink: 0; margin-top: 4px;"></i>
+            <div style="font-size: 0.9rem; line-height: 1.6; color: var(--text-dim);">
+                <strong style="color: var(--text-main); display: block; margin-bottom: 0.5rem;">实验操作与计算说明 (Workflow & Logic):</strong>
+                <ul style="padding-left: 1.2rem; margin-bottom: 0.8rem;">
+                    <li><strong>取样：</strong>使用直径 4mm 打孔器，每管取 4 片叶圆片 (Discs)。</li>
+                    <li><strong>匀浆：</strong>加入 200µl <strong>无菌水</strong> 研磨，随后用 <strong>无菌水</strong> 补齐至 1000µl (1ml) 混匀。</li>
+                    <li><strong>稀释：</strong>进行 10 倍梯度稀释 (如取 20µl 匀浆液加入 180µl 稀释液中)。</li>
+                    <li><strong>计算公式：</strong>菌浓度 (CFU/cm²) = [菌落数 × 稀释倍数 × (1000 / 点板体积)] / [圆片数 × π × (半径)²]。</li>
+                    <li><strong>统计：</strong>数据取 log₁₀ 后进行单因素 ANOVA (Bonferroni 校正)。</li>
+                </ul>
+                <p style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.8rem;">* 注：以上为本工具默认参数设置。若操作不同，请在下方"参数设置"区手动修改对应数值。</p>
+                <button class="btn-outline" id="toggle-protocol-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 8px;">
+                    <i data-lucide="book-open" style="width: 14px; height: 14px;"></i> 查看详细实验 Protocol
+                </button>
+                <div id="detailed-protocol" style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(99, 102, 241, 0.1); animation: fadeInUp 0.4s ease-out;">
+                    <h4 style="color: var(--text-main); margin-bottom: 0.8rem; font-size: 1rem;">Pst DC3000 侵染实验详细步骤:</h4>
+                    <div class="protocol-grid" style="font-size: 0.85rem; color: var(--text-dim); display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div>
+                            <p style="color: var(--primary); font-weight: 600; margin-bottom: 0.4rem;">1. 菌液准备</p>
+                            <p>DC3000 在含有 Rif (50mg/L) 的 <strong>LB</strong> 培养基中 28°C 振荡培养至对数期。离心收集，用 <strong>无菌水</strong> 洗涤并稀释至目标浓度（如注射法 <strong>OD₆₀₀=0.002</strong>）。</p>
+                            <p style="color: var(--primary); font-weight: 600; margin-top: 0.8rem; margin-bottom: 0.4rem;">2. 植物接种</p>
+                            <p>使用无针头注射器从叶片背部气孔注入菌液。注射过程仅需使用无菌水重悬的菌液，无需添加去垢剂。</p>
+                        </div>
+                        <div>
+                            <p style="color: var(--primary); font-weight: 600; margin-bottom: 0.4rem;">3. 取样与研磨</p>
+                            <p>接种后 0-3 天取样。用打孔器避开主叶脉取 4 片圆片放入 1.5ml 离心管，加 2 颗不锈钢珠和 200µl <strong>无菌水</strong>，使用研磨仪破碎，再用 <strong>无菌水</strong> 补齐至 1ml。</p>
+                            <p style="color: var(--primary); font-weight: 600; margin-top: 0.8rem; margin-bottom: 0.4rem;">4. 点板与计数</p>
+                            <p>梯度稀释后，每组取 20µl 点在含有 Rif 的 <strong>LB</strong> 平板上。28°C 培养 48h 后计数。选择菌落数在 15-100 之间的梯度进行记录。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Config -->
+    <div class="card">
+        <!-- [新增] 实验名称输入 -->
+        <div style="margin-bottom: 1.5rem;">
+            <div class="input-group">
+                <label for="experiment-name" style="color: var(--accent); font-size: 1rem;">
+                    <i data-lucide="flask-conical" style="width: 16px; height: 16px;"></i>
+                    实验名称 (Experiment Name)
+                </label>
+                <input type="text" id="experiment-name" placeholder="例如: DC3000_sap30_knockout_2026">
+                <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem;">用于区分不同实验，将体现在导出文件名和 CSV 元信息中</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="input-group">
+                <label for="genotype-name">基因型 (Genotype)</label>
+                <input type="text" id="genotype-name" placeholder="例如: Col-0, sap30...">
+            </div>
+            <div class="input-group">
+                <label for="rep-count">生物学重复数量 (n)</label>
+                <input type="number" id="rep-count" value="8" min="1" max="20">
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
+                <button class="btn-primary" id="add-genotype-btn">
+                    <i data-lucide="plus-circle"></i> 添加组别
+                </button>
+                <button class="btn-outline" id="import-csv-btn" onclick="document.getElementById('csv-file-input').click()">
+                    <i data-lucide="upload"></i> 导入 CSV
+                </button>
+                <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+            </div>
+        </div>
+        
+        <!-- Experiment Settings -->
+        <div class="settings-grid" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+            <div class="input-group">
+                <label for="disc-diameter">打孔器直径 (mm)</label>
+                <input type="number" id="disc-diameter" value="4" step="0.1" min="0.1">
+            </div>
+            <div class="input-group">
+                <label for="disc-count">圆片数量 (Discs per tube)</label>
+                <input type="number" id="disc-count" value="4" min="1">
+            </div>
+            <div class="input-group">
+                <label for="plating-vol">点板体积 (µl)</label>
+                <input type="number" id="plating-vol" value="20" min="1">
+            </div>
+            
+            <div class="input-group" style="grid-column: span 2; border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 0.5rem;">
+                <label for="outlier-method" style="color: var(--accent);">
+                    <i data-lucide="filter" style="width: 16px; height: 16px;"></i>
+                    数据剔除策略
+                </label>
+                <select id="outlier-method">
+                    <option value="none">不剔除，保留所有原始数据</option>
+                    <option value="iqr">四分位距法 (IQR > 1.5) — 推荐</option>
+                    <option value="zscore">Z-Score 法 (|Z| > 1.5)</option>
+                </select>
+                <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem;">
+                    * 被剔除的数据点以半透明红色标出，不参与均值、误差线及显著性字母计算。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Entry Area -->
+    <div id="data-entries">
+        <div class="empty-state" id="empty-state">
+            <i data-lucide="database" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p>暂无数据。请在上方输入基因型并开始记录。</p>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="btn-group" id="main-actions" style="display: none;">
+        <button class="btn-primary" id="calculate-btn">
+            <i data-lucide="calculator"></i> 开始计算与统计分析
+        </button>
+        <button class="btn-outline" id="clear-btn">
+            <i data-lucide="trash-2"></i> 重置所有
+        </button>
+    </div>
+
+    <!-- Results Display -->
+    <div id="results-section" class="entry-section">
+        <div class="card">
+            <div class="genotype-header">
+                <div>
+                    <span class="genotype-title">统计图表与 ANOVA 分析</span>
+                    <p id="calc-formula-display" style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;"></p>
+                </div>
+                <!-- [改进] 导出下拉菜单 -->
+                <div class="export-dropdown">
+                    <button class="btn-outline" id="export-btn">
+                        <i data-lucide="download"></i> 导出
+                    </button>
+                    <div class="export-menu" id="export-menu">
+                        <button class="export-menu-item" id="download-csv-btn">
+                            <i data-lucide="file-spreadsheet" style="width: 16px; height: 16px;"></i>
+                            <div>
+                                <div style="color: var(--text-main); font-weight: 600;">下载完整 CSV</div>
+                                <div style="font-size: 0.75rem;">含原始数据、统计摘要、p-value 矩阵</div>
+                            </div>
+                        </button>
+                        <button class="export-menu-item" id="download-svg-btn">
+                            <i data-lucide="file-image" style="width: 16px; height: 16px;"></i>
+                            <div>
+                                <div style="color: var(--text-main); font-weight: 600;">保存 SVG 矢量图</div>
+                                <div style="font-size: 0.75rem;">适合论文投稿，无损缩放</div>
+                            </div>
+                        </button>
+                        <button class="export-menu-item" id="download-png-btn">
+                            <i data-lucide="image" style="width: 16px; height: 16px;"></i>
+                            <div>
+                                <div style="color: var(--text-main); font-weight: 600;">保存 PNG 位图 (300dpi)</div>
+                                <div style="font-size: 0.75rem;">适合期刊投稿，高分辨率</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- [改进] 图表设置控件：移到图表旁边，方便实时调整 -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: end;">
+                <div class="input-group" style="flex: 1; min-width: 160px;">
+                    <label for="chart-type" style="color: var(--accent); font-size: 0.85rem;">
+                        <i data-lucide="bar-chart-2" style="width: 14px; height: 14px;"></i>
+                        图表类型
+                    </label>
+                    <select id="chart-type" style="padding: 0.6rem 0.8rem; font-size: 0.9rem;">
+                        <option value="bar">柱状图 + 散点</option>
+                        <option value="box">箱线图 + 散点</option>
+                        <option value="violin">小提琴图 + 散点</option>
+                    </select>
+                </div>
+                <div class="input-group" style="flex: 1; min-width: 160px;">
+                    <label for="color-scheme" style="color: var(--accent); font-size: 0.85rem;">
+                        <i data-lucide="palette" style="width: 14px; height: 14px;"></i>
+                        配色方案
+                    </label>
+                    <select id="color-scheme" style="padding: 0.6rem 0.8rem; font-size: 0.9rem;">
+                        <option value="indigo">经典靛蓝 (暗黑)</option>
+                        <option value="nature">自然翠绿 (暗黑)</option>
+                        <option value="multi">多巴胺彩虹 (暗黑)</option>
+                        <option value="publication">学术灰度 (白底)</option>
+                        <option value="pub_blue">科技蓝 (白底)</option>
+                        <option value="pub_color">彩色对比 (白底)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="plot-container" id="plot-area"></div>
+
+            <!-- 数据摘要统计表格 -->
+            <div id="summary-section" style="margin-top: 1.5rem;">
+                <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="table" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                    数据摘要 (Data Summary)
+                </h3>
+                <div style="overflow-x: auto;">
+                    <table class="summary-table" id="summary-table"></table>
+                </div>
+            </div>
+
+            <!-- [新增] ANOVA 整体检验结果 -->
+            <div id="anova-section" style="margin-top: 1.5rem; display: none;">
+                <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="flask-conical" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                    One-way ANOVA 整体检验
+                </h3>
+                <div id="anova-result-box" style="padding: 1rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,0.15); font-size: 0.9rem; line-height: 1.8;">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+
+            <!-- p-value 两两比较矩阵 -->
+            <div id="pvalue-section" style="margin-top: 1.5rem; display: none;">
+                <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="git-compare" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                    两两比较 P-value 矩阵 (Bonferroni 校正)
+                </h3>
+                <div style="overflow-x: auto;">
+                    <table class="summary-table" id="pvalue-table"></table>
+                </div>
+                <p id="pvalue-note" style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">* 加粗值表示校正后 p < 0.05（差异显著）</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    // =============================================
+    // 全局变量：存储最后的统计结果（用于导出）
+    // =============================================
+    let lastStats = null;
+    let lastPValueMatrix = null;
+    let lastGenotypes = null;
+
+    // =============================================
+    // 确定性伪随机数生成器
+    // =============================================
+    function seededRandom(seed) {
+        let s = seed;
+        return function() {
+            s = (s * 16807 + 0) % 2147483647;
+            return (s - 1) / 2147483646;
+        };
+    }
+
+    // =============================================
+    // Toast 通知
+    // =============================================
+    function showToast(message, type = 'info', duration = 3000) {
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'toastOut 0.3s ease-in forwards';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // =============================================
+    // 日期格式化
+    // =============================================
+    function formatDateForFilename() {
+        const now = new Date();
+        return `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function getExperimentName() {
+        return document.getElementById('experiment-name').value.trim() || 'DC3000';
+    }
+
+    // =============================================
+    // [新增] localStorage 自动保存/恢复
+    // =============================================
+    const STORAGE_KEY = 'dc3000_analysis_data';
+
+    function saveToLocalStorage() {
+        try {
+            const data = {
+                experimentName: document.getElementById('experiment-name').value,
+                discDiameter: document.getElementById('disc-diameter').value,
+                discCount: document.getElementById('disc-count').value,
+                platingVol: document.getElementById('plating-vol').value,
+                outlierMethod: document.getElementById('outlier-method').value,
+                colorScheme: document.getElementById('color-scheme').value,
+                chartType: document.getElementById('chart-type').value,
+                entries: []
+            };
+
+            document.querySelectorAll('.entry-section').forEach(section => {
+                const genotype = section.querySelector('.genotype-title').childNodes[0].textContent.trim();
+                const rows = section.querySelectorAll('.rep-row');
+                const rowData = [];
+                rows.forEach(row => {
+                    const repId = row.querySelector('td').innerText;
+                    const inputs = {};
+                    row.querySelectorAll('.dilution-input').forEach(inp => {
+                        if (inp.value) inputs[inp.dataset.dil] = inp.value;
+                    });
+                    rowData.push({ repId, inputs });
+                });
+                data.entries.push({ genotype, rows: rowData });
+            });
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+            // 显示保存提示
+            const indicator = document.getElementById('autosave-indicator');
+            indicator.classList.add('visible');
+            setTimeout(() => indicator.classList.remove('visible'), 2000);
+        } catch(e) { /* 静默失败 */ }
+    }
+
+    function restoreFromLocalStorage() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+            if (!data.entries || data.entries.length === 0) return false;
+
+            // 恢复参数
+            if (data.experimentName) document.getElementById('experiment-name').value = data.experimentName;
+            if (data.discDiameter) document.getElementById('disc-diameter').value = data.discDiameter;
+            if (data.discCount) document.getElementById('disc-count').value = data.discCount;
+            if (data.platingVol) document.getElementById('plating-vol').value = data.platingVol;
+            if (data.outlierMethod) document.getElementById('outlier-method').value = data.outlierMethod;
+            if (data.colorScheme) document.getElementById('color-scheme').value = data.colorScheme;
+            if (data.chartType) document.getElementById('chart-type').value = data.chartType;
+
+            // 恢复数据条目
+            data.entries.forEach(entry => {
+                const container = addGenotypeEntry(entry.genotype, entry.rows.length);
+                const rows = container.querySelectorAll('tbody tr');
+                entry.rows.forEach((rowData, idx) => {
+                    if (idx < rows.length) {
+                        Object.entries(rowData.inputs).forEach(([dil, val]) => {
+                            const input = rows[idx].querySelector(`.dilution-input[data-dil="${dil}"]`);
+                            if (input) input.value = val;
+                        });
+                    }
+                });
+            });
+
+            showToast('已恢复上次保存的数据', 'info');
+            return true;
+        } catch(e) { return false; }
+    }
+
+    // 自动保存：监听所有输入变化
+    function setupAutoSave() {
+        let saveTimer = null;
+        const debouncedSave = () => {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveToLocalStorage, 1000);
+        };
+
+        // 监听数据输入
+        document.getElementById('data-entries').addEventListener('input', debouncedSave);
+        // 监听参数变化
+        ['experiment-name', 'disc-diameter', 'disc-count', 'plating-vol', 'outlier-method', 'color-scheme', 'chart-type'].forEach(id => {
+            document.getElementById(id).addEventListener('change', debouncedSave);
+        });
+    }
+
+    // =============================================
+    // 导出下拉菜单
+    // =============================================
+    document.getElementById('export-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('export-menu').classList.toggle('show');
+    });
+    document.addEventListener('click', () => {
+        document.getElementById('export-menu').classList.remove('show');
+    });
+    document.getElementById('export-menu').addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // 自动更新图表
+    ['color-scheme', 'chart-type'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            if (document.getElementById('results-section').style.display === 'block') processData();
+        });
+    });
+    ['disc-diameter', 'disc-count', 'plating-vol', 'outlier-method'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            if (document.getElementById('results-section').style.display === 'block') processData();
+        });
+    });
+
+    // 输入验证
+    ['disc-diameter', 'disc-count', 'plating-vol', 'rep-count'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+            const val = parseFloat(el.value);
+            const min = parseFloat(el.min);
+            if (isNaN(val) || val <= 0 || (min && val < min)) {
+                el.classList.add('invalid'); el.classList.remove('valid');
+            } else {
+                el.classList.remove('invalid'); el.classList.add('valid');
+            }
+        });
+    });
+
+    // Protocol 开关
+    document.getElementById('toggle-protocol-btn').addEventListener('click', function() {
+        const detail = document.getElementById('detailed-protocol');
+        const isHidden = detail.style.display === 'none';
+        detail.style.display = isHidden ? 'block' : 'none';
+        this.innerHTML = isHidden ? 
+            '<i data-lucide="chevron-up" style="width: 14px; height: 14px;"></i> 收起实验 Protocol' : 
+            '<i data-lucide="book-open" style="width: 14px; height: 14px;"></i> 查看详细实验 Protocol';
+        lucide.createIcons();
+    });
+
+    function getCalcParams() {
+        const d = parseFloat(document.getElementById('disc-diameter').value);
+        const count = parseInt(document.getElementById('disc-count').value);
+        const v = parseFloat(document.getElementById('plating-vol').value);
+        const r = d / 20;
+        const area = count * Math.PI * Math.pow(r, 2);
+        const volFactor = 1000 / v;
+        return { area, volFactor, d, count, v };
+    }
+
+    // Enter 键添加组别
+    document.getElementById('genotype-name').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('add-genotype-btn').click(); }
+    });
+
+    document.getElementById('add-genotype-btn').addEventListener('click', () => {
+        const name = document.getElementById('genotype-name').value.trim();
+        const n = parseInt(document.getElementById('rep-count').value);
+        if (!name) { showToast('请输入基因型名称', 'error'); document.getElementById('genotype-name').focus(); return; }
+        if (isNaN(n) || n < 1) { showToast('请输入有效的重复数量', 'error'); return; }
+        addGenotypeEntry(name, n);
+        showToast(`已添加组别: ${name} (n=${n})`, 'success');
+    });
+
+    function addGenotypeEntry(name, n) {
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('main-actions').style.display = 'flex';
+
+        const entryId = 'entry-' + Date.now();
+        const container = document.createElement('div');
+        container.className = 'card entry-section';
+        container.id = entryId;
+
+        let tableHtml = `
+            <div class="genotype-header">
+                <span class="genotype-title">${name} <span class="badge">n=${n}</span></span>
+                <button class="btn-danger" style="padding: 0.4rem;" onclick="removeEntry('${entryId}', '${name}')">
+                    <i data-lucide="x-circle"></i>
+                </button>
+            </div>
+            <div class="table-wrapper">
+            <table>
+                <thead><tr>
+                    <th width="100">重复</th><th>10⁻¹</th><th>10⁻²</th><th>10⁻³</th><th>10⁻⁴</th><th>10⁻⁵</th>
+                </tr></thead>
+                <tbody>
+        `;
+        for (let i = 1; i <= n; i++) {
+            tableHtml += `
+                <tr class="rep-row" data-genotype="${name}">
+                    <td>Rep ${i}</td>
+                    <td><input type="number" class="dilution-input" data-dil="1" placeholder="0" min="0"></td>
+                    <td><input type="number" class="dilution-input" data-dil="2" placeholder="0" min="0"></td>
+                    <td><input type="number" class="dilution-input" data-dil="3" placeholder="0" min="0"></td>
+                    <td><input type="number" class="dilution-input" data-dil="4" placeholder="0" min="0"></td>
+                    <td><input type="number" class="dilution-input" data-dil="5" placeholder="0" min="0"></td>
+                </tr>`;
+        }
+        tableHtml += `</tbody></table></div>`;
+        container.innerHTML = tableHtml;
+        document.getElementById('data-entries').appendChild(container);
+        lucide.createIcons();
+        document.getElementById('genotype-name').value = '';
+        document.getElementById('genotype-name').focus();
+        return container;
+    }
+
+    // [改进] 删除前确认
+    window.removeEntry = (id, name) => {
+        if (confirm(`确定删除组别 "${name}" 吗？此操作不可撤销。`)) {
+            document.getElementById(id)?.remove();
+            if (document.querySelectorAll('[id^="entry-"]').length === 0) {
+                document.getElementById('empty-state').style.display = 'block';
+                document.getElementById('main-actions').style.display = 'none';
+                document.getElementById('results-section').style.display = 'none';
+            }
+            saveToLocalStorage();
+            showToast(`已删除组别: ${name}`, 'info');
+        }
+    };
+
+    document.getElementById('clear-btn').addEventListener('click', () => {
+        if (confirm('确定清空所有数据吗？此操作不可撤销。')) {
+            document.getElementById('data-entries').innerHTML = `
+                <div class="empty-state" id="empty-state">
+                    <i data-lucide="database" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+                    <p>暂无数据。请在上方输入基因型并开始记录。</p>
+                </div>`;
+            document.getElementById('main-actions').style.display = 'none';
+            document.getElementById('results-section').style.display = 'none';
+            lucide.createIcons();
+            localStorage.removeItem(STORAGE_KEY);
+            showToast('所有数据已清空', 'info');
+        }
+    });
+
+    document.getElementById('calculate-btn').addEventListener('click', processData);
+
+    function processData() {
+        const { area, volFactor, d, count, v } = getCalcParams();
+        if (area <= 0 || isNaN(area)) { showToast('参数错误：请检查打孔器直径和圆片数量', 'error'); return; }
+
+        const rows = document.querySelectorAll('.rep-row');
+        const resultsByGenotype = {};
+
+        document.getElementById('calc-formula-display').innerText = 
+            `计算公式: Log₁₀((Colony_Count × ${volFactor} × 10^dil) / (${count} × π × (${d/20})²))`;
+
+        document.querySelectorAll('.dilution-input.best-dilution').forEach(el => el.classList.remove('best-dilution'));
+
+        rows.forEach(row => {
+            const genotype = row.dataset.genotype;
+            const repId = row.querySelector('td').innerText;
+            const inputs = row.querySelectorAll('.dilution-input');
+            
+            let bestVal = null, bestDil = null, bestInput = null;
+            let bestInRange = false, bestDistToMid = Infinity;
+            let lastValidVal = null, lastValidDil = null, lastValidInput = null;
+
+            inputs.forEach(input => {
+                const val = parseFloat(input.value);
+                const dil = parseInt(input.dataset.dil);
+                if (!isNaN(val) && val > 0) {
+                    lastValidVal = val; lastValidDil = dil; lastValidInput = input;
+                    if (val >= 15 && val <= 100) {
+                        const distToMid = Math.abs(val - 50);
+                        if (!bestInRange || distToMid < bestDistToMid) {
+                            bestVal = val; bestDil = dil; bestInput = input;
+                            bestInRange = true; bestDistToMid = distToMid;
+                        }
+                    }
+                }
+            });
+
+            if (!bestInRange && lastValidVal !== null) {
+                bestVal = lastValidVal; bestDil = lastValidDil; bestInput = lastValidInput;
+            }
+
+            if (bestVal !== null) {
+                if (bestInput) bestInput.classList.add('best-dilution');
+                const cfu = (bestVal * volFactor * Math.pow(10, bestDil)) / area;
+                const logCfu = Math.log10(cfu);
+                if (!resultsByGenotype[genotype]) resultsByGenotype[genotype] = [];
+                resultsByGenotype[genotype].push({ repId, val: bestVal, dil: bestDil, cfu, logCfu, isOutlier: false });
+            }
+        });
+
+        if (Object.keys(resultsByGenotype).length === 0) { showToast('请至少输入一些菌落数据', 'error'); return; }
+        renderResults(resultsByGenotype);
+    }
+
+    function removeOutliers(items, method) {
+        if (items.length < 3) return;
+        if (method === 'iqr') {
+            let sorted = [...items].sort((a,b) => a.logCfu - b.logCfu);
+            const q1 = sorted[Math.floor((sorted.length - 1) * 0.25)].logCfu;
+            const q3 = sorted[Math.floor((sorted.length - 1) * 0.75)].logCfu;
+            const iqr = q3 - q1;
+            items.forEach(v => { if (v.logCfu < q1 - 1.5*iqr || v.logCfu > q3 + 1.5*iqr) v.isOutlier = true; });
+        } else if (method === 'zscore') {
+            const mean = items.reduce((a, b) => a + b.logCfu, 0) / items.length;
+            const stdDev = Math.sqrt(items.reduce((a, b) => a + Math.pow(b.logCfu - mean, 2), 0) / items.length);
+            items.forEach(v => { if (Math.abs(v.logCfu - mean) > 1.5 * stdDev) v.isOutlier = true; });
+        }
+    }
+
+    // =============================================
+    // [新增] One-way ANOVA F 检验
+    // =============================================
+    function performANOVA(stats) {
+        const k = stats.length;
+        if (k < 2) return null;
+
+        // 收集所有有效数据
+        const allLogs = [];
+        let N = 0;
+        const groupMeans = [];
+        const groupSizes = [];
+
+        stats.forEach(s => {
+            if (s.validLogs.length < 1) return;
+            groupMeans.push(jStat.mean(s.validLogs));
+            groupSizes.push(s.validLogs.length);
+            N += s.validLogs.length;
+            allLogs.push(...s.validLogs);
+        });
+
+        if (N < k) return null; // 数据不足
+
+        const grandMean = jStat.mean(allLogs);
+
+        // Sum of Squares Between groups (SSB)
+        let SSB = 0;
+        for (let i = 0; i < groupMeans.length; i++) {
+            SSB += groupSizes[i] * Math.pow(groupMeans[i] - grandMean, 2);
+        }
+
+        // Sum of Squares Within groups (SSW)
+        let SSW = 0;
+        stats.forEach(s => {
+            if (s.validLogs.length < 2) return;
+            const variance = jStat.variance(s.validLogs, true);
+            SSW += variance * (s.validLogs.length - 1);
+        });
+
+        const df1 = groupMeans.length - 1; // between groups
+        const df2 = N - groupMeans.length;  // within groups (residual)
+
+        if (df2 <= 0) return null;
+
+        const MSB = SSB / df1;
+        const MSW = SSW / df2;
+
+        let F, pValue;
+        if (MSW === 0) {
+            // 所有组内方差为 0（极端情况）
+            F = SSB > 0 ? Infinity : 0;
+            pValue = SSB > 0 ? 0 : 1;
+        } else {
+            F = MSB / MSW;
+            // 使用 F 分布的 CDF 计算 p 值
+            pValue = 1 - jStat.centralF.cdf(F, df1, df2);
+        }
+
+        return {
+            F: F === Infinity ? '>999' : parseFloat(F.toFixed(4)),
+            df1, df2,
+            pValue: pValue < 0.0001 ? '<0.0001' : parseFloat(pValue.toFixed(4)),
+            pValueRaw: pValue,
+            significant: pValue < 0.05,
+            SSB: parseFloat(SSB.toFixed(4)),
+            SSW: parseFloat(SSW.toFixed(4)),
+            MSB: parseFloat(MSB.toFixed(4)),
+            MSW: MSW === 0 ? 0 : parseFloat(MSW.toFixed(4)),
+            grandMean: parseFloat(grandMean.toFixed(4)),
+            N
+        };
+    }
+
+    // [改进] assignLetters：先做 ANOVA，显著后才做两两比较
+    function assignLetters(stats) {
+        const k = stats.length;
+        if (k <= 1) { if(k === 1) stats[0].letter = 'a'; return {}; }
+
+        // Step 1: One-way ANOVA 整体检验
+        const anovaResult = performANOVA(stats);
+        window._lastANOVA = anovaResult; // 保存供显示和导出使用
+
+        const pMatrix = Array(k).fill(0).map(() => Array(k).fill(''));
+
+        // 如果 ANOVA 不显著，所有组分配相同字母，不做两两比较
+        if (anovaResult && !anovaResult.significant) {
+            for (let i = 0; i < k; i++) stats[i].letter = 'a';
+            // p-value 矩阵仍计算但不影响字母分配
+            const num_comparisons = k * (k - 1) / 2;
+            for (let i = 0; i < k; i++) {
+                for (let j = i + 1; j < k; j++) {
+                    let v1 = stats[i].validLogs, v2 = stats[j].validLogs;
+                    if (v1.length < 2 || v2.length < 2) continue;
+                    const mean1 = jStat.mean(v1), mean2 = jStat.mean(v2);
+                    const var1 = jStat.variance(v1, true), var2 = jStat.variance(v2, true);
+                    const n1 = v1.length, n2 = v2.length;
+                    if (var1 === 0 && var2 === 0) {
+                        pMatrix[i][j] = mean1 !== mean2 ? '<0.001' : '1.000';
+                    } else {
+                        const t = (mean1 - mean2) / Math.sqrt(var1/n1 + var2/n2);
+                        const df = Math.pow(var1/n1 + var2/n2, 2) / (Math.pow(var1/n1, 2)/(n1-1) + Math.pow(var2/n2, 2)/(n2-1));
+                        let p = 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
+                        let p_adj = Math.min(1.0, p * num_comparisons);
+                        pMatrix[i][j] = p_adj < 0.001 ? '<0.001' : p_adj.toFixed(4);
+                    }
+                    pMatrix[j][i] = pMatrix[i][j];
+                }
+            }
+            return pMatrix;
+        }
+
+        // Step 2: ANOVA 显著，进行两两比较
+        let sortedIndices = Array.from({length: k}, (_, i) => i).sort((a, b) => stats[b].mean - stats[a].mean);
+        const sigMatrix = Array(k).fill(0).map(() => Array(k).fill(false));
+        const num_comparisons = k * (k - 1) / 2;
+        
+        for (let i = 0; i < k; i++) {
+            for (let j = i + 1; j < k; j++) {
+                let v1 = stats[i].validLogs, v2 = stats[j].validLogs;
+                if (v1.length < 2 || v2.length < 2) continue;
+                
+                const mean1 = jStat.mean(v1), mean2 = jStat.mean(v2);
+                const var1 = jStat.variance(v1, true), var2 = jStat.variance(v2, true);
+                const n1 = v1.length, n2 = v2.length;
+                
+                if (var1 === 0 && var2 === 0) {
+                    if (mean1 !== mean2) { sigMatrix[i][j] = true; sigMatrix[j][i] = true; }
+                    pMatrix[i][j] = mean1 !== mean2 ? '<0.001' : '1.000';
+                    pMatrix[j][i] = pMatrix[i][j];
+                    continue;
+                }
+                
+                const t = (mean1 - mean2) / Math.sqrt(var1/n1 + var2/n2);
+                const df = Math.pow(var1/n1 + var2/n2, 2) / (Math.pow(var1/n1, 2)/(n1-1) + Math.pow(var2/n2, 2)/(n2-1));
+                let p = 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
+                let p_adj = Math.min(1.0, p * num_comparisons);
+                
+                if (p_adj < 0.05) { sigMatrix[i][j] = true; sigMatrix[j][i] = true; }
+                pMatrix[i][j] = p_adj < 0.001 ? '<0.001' : p_adj.toFixed(4);
+                pMatrix[j][i] = pMatrix[i][j];
+            }
+        }
+        
+        // Step 3: CLD 字母分配
+        let clusters = [];
+        for (let i = 0; i < k; i++) {
+            let actualI = sortedIndices[i], cluster = [actualI];
+            for (let j = i + 1; j < k; j++) {
+                let actualJ = sortedIndices[j];
+                if (!sigMatrix[actualI][actualJ]) {
+                    let canJoin = true;
+                    for (let member of cluster) { if (sigMatrix[member][actualJ]) { canJoin = false; break; } }
+                    if (canJoin) cluster.push(actualJ);
+                }
+            }
+            clusters.push(cluster.sort((a,b)=>a-b));
+        }
+        
+        let uniqueClusters = [];
+        for (let i = 0; i < clusters.length; i++) {
+            let isSubset = false;
+            for (let j = 0; j < clusters.length; j++) {
+                if (i !== j && clusters[i].every(val => clusters[j].includes(val))) {
+                    if (clusters[i].length < clusters[j].length || (clusters[i].length === clusters[j].length && i > j)) { isSubset = true; break; }
+                }
+            }
+            if (!isSubset) uniqueClusters.push(clusters[i]);
+        }
+        
+        let letters = Array(k).fill("");
+        uniqueClusters.forEach((cluster, idx) => {
+            let letter = String.fromCharCode(97 + idx);
+            cluster.forEach(member => { letters[member] += letter; });
+        });
+        
+        for (let i = 0; i < k; i++) stats[i].letter = letters[i] || 'a';
+
+        return pMatrix;
+    }
+
+    function niceScale(minVal, maxVal, maxTicks = 8) {
+        const range = maxVal - minVal;
+        if (range <= 0) return { min: Math.floor(minVal) - 1, max: Math.ceil(maxVal) + 1, step: 1 };
+        const roughStep = range / maxTicks;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+        const residual = roughStep / magnitude;
+        let niceStep;
+        if (residual <= 1.5) niceStep = magnitude;
+        else if (residual <= 3) niceStep = 2 * magnitude;
+        else if (residual <= 7) niceStep = 5 * magnitude;
+        else niceStep = 10 * magnitude;
+        return { min: Math.floor(minVal / niceStep) * niceStep, max: Math.ceil(maxVal / niceStep) * niceStep, step: niceStep };
+    }
+
+    function renderResults(res) {
+        document.getElementById('results-section').style.display = 'block';
+        const genotypes = Object.keys(res);
+        const outlierMethod = document.getElementById('outlier-method').value;
+        
+        const stats = genotypes.map(g => {
+            let items = res[g];
+            items.forEach(i => i.isOutlier = false);
+            if (outlierMethod !== 'none') removeOutliers(items, outlierMethod);
+            const validItems = items.filter(i => !i.isOutlier);
+            const validLogs = validItems.map(i => i.logCfu);
+            let mean = 0, se = 0;
+            if (validLogs.length > 0) {
+                mean = jStat.mean(validLogs);
+                if (validLogs.length > 1) se = Math.sqrt(jStat.variance(validLogs, true)) / Math.sqrt(validLogs.length);
+            }
+            return { genotype: g, mean, se, raw: items, validLogs };
+        });
+
+        stats.forEach(s => {
+            if (s.validLogs.length > 0) {
+                const sorted = [...s.validLogs].sort((a, b) => a - b);
+                s.q1 = jStat.percentile(sorted, 0.25);
+                s.median = jStat.percentile(sorted, 0.5);
+                s.q3 = jStat.percentile(sorted, 0.75);
+                const iqr = s.q3 - s.q1;
+                s.min = Math.max(sorted[0], s.q1 - 1.5 * iqr);
+                s.max = Math.min(sorted[sorted.length - 1], s.q3 + 1.5 * iqr);
+            }
+        });
+
+        const pMatrix = assignLetters(stats);
+        generateSVG(stats);
+        renderSummaryTable(stats, outlierMethod);
+        renderANOVATable();
+        renderPValueTable(stats, pMatrix);
+
+        // 保存全局结果供导出使用
+        lastStats = stats;
+        lastPValueMatrix = pMatrix;
+        lastGenotypes = genotypes;
+
+        // [改进] 构建增强版 CSV
+        buildEnhancedCSV(stats, pMatrix, outlierMethod);
+    }
+
+    // =============================================
+    // [核心改进] 增强版 CSV 导出
+    // =============================================
+    function buildEnhancedCSV(stats, pMatrix, outlierMethod) {
+        const { area, volFactor, d, count, v } = getCalcParams();
+        const expName = getExperimentName();
+        const now = new Date();
+        const timestamp = now.toLocaleString('zh-CN');
+        const outlierLabel = outlierMethod === 'none' ? 'None' : outlierMethod === 'iqr' ? 'IQR (1.5)' : 'Z-Score (1.5)';
+
+        let csv = '';
+
+        // ===== 第一部分：元信息注释 =====
+        csv += `# DC3000 侵染实验数据分析报告\n`;
+        csv += `# 实验名称: ${expName}\n`;
+        csv += `# 生成时间: ${timestamp}\n`;
+        csv += `# 工具版本: DC3000 Data Processor Pro v2.0\n`;
+        csv += `#\n`;
+        csv += `# === 实验参数 ===\n`;
+        csv += `# 打孔器直径: ${d} mm\n`;
+        csv += `# 圆片数量: ${count} discs/tube\n`;
+        csv += `# 点板体积: ${v} µl\n`;
+        csv += `# 单片面积: ${(Math.PI * Math.pow(d/20, 2)).toFixed(6)} cm²\n`;
+        csv += `# 总面积: ${area.toFixed(6)} cm²\n`;
+        csv += `# 体积换算因子: ${volFactor}\n`;
+        csv += `# 异常值剔除方法: ${outlierLabel}\n`;
+        csv += `# 统计方法: One-way ANOVA (F-test) + Welch's t-test (post-hoc) + Bonferroni correction\n`;
+
+        // ANOVA 结果写入 CSV
+        const anova = window._lastANOVA;
+        if (anova) {
+            csv += `# === ANOVA 结果 ===\n`;
+            csv += `# F(${anova.df1}, ${anova.df2}) = ${anova.F}, p = ${anova.pValue}${anova.significant ? ' *' : ' (ns)'}\n`;
+            csv += `# SSB = ${anova.SSB}, SSW = ${anova.SSW}, MSB = ${anova.MSB}, MSW = ${anova.MSW}\n`;
+            csv += `# Grand Mean = ${anova.grandMean}, Total N = ${anova.N}\n`;
+            if (!anova.significant) {
+                csv += `# 注意: ANOVA 整体检验不显著 (p >= 0.05)，两两比较结果仅供参考\n`;
+            }
+            csv += `#\n`;
+        }
+        csv += `#\n`;
+
+        // ===== 第二部分：原始数据 =====
+        csv += `# === 原始数据 (Raw Data) ===\n`;
+        csv += `Genotype,Rep,Dilution_Exponent,Dilution_Factor,Colony_Count,CFU_per_cm2,Log10_CFU_per_cm2,Is_Outlier,Outlier_Method\n`;
+        stats.forEach(s => {
+            s.raw.forEach(v => {
+                const dilFactor = Math.pow(10, v.dil);
+                csv += `${s.genotype},${v.repId},${v.dil},${dilFactor},${v.val},${v.cfu.toFixed(4)},${v.logCfu.toFixed(6)},${v.isOutlier},${outlierLabel}\n`;
+            });
+        });
+
+        csv += `\n`;
+
+        // ===== 第三部分：统计摘要 =====
+        csv += `# === 统计摘要 (Statistical Summary) ===\n`;
+        csv += `Genotype,Valid_N,Outlier_N,Mean_Log10,SE_Log10,Min_Log10,Max_Log10,Letter\n`;
+        stats.forEach(s => {
+            const outlierCount = s.raw.filter(v => v.isOutlier).length;
+            const minVal = s.validLogs.length > 0 ? Math.min(...s.validLogs).toFixed(4) : '';
+            const maxVal = s.validLogs.length > 0 ? Math.max(...s.validLogs).toFixed(4) : '';
+            csv += `${s.genotype},${s.validLogs.length},${outlierCount},${s.mean.toFixed(4)},${s.se.toFixed(4)},${minVal},${maxVal},${s.letter}\n`;
+        });
+
+        csv += `\n`;
+
+        // ===== 第四部分：p-value 两两比较矩阵 =====
+        if (stats.length > 1 && pMatrix) {
+            csv += `# === 两两比较 P-value 矩阵 (Bonferroni corrected) ===\n`;
+            const headers = stats.map(s => s.genotype).join(',');
+            csv += `,${headers}\n`;
+            stats.forEach((s, i) => {
+                let row = s.genotype;
+                stats.forEach((_, j) => {
+                    row += `,${pMatrix[i][j] || ''}`;
+                });
+                csv += row + '\n';
+            });
+        }
+
+        // 下载处理
+        document.getElementById('download-csv-btn').onclick = () => {
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${expName}_Report_${formatDateForFilename()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            document.getElementById('export-menu').classList.remove('show');
+            showToast('CSV 报告已下载', 'success');
+        };
+    }
+
+    // =============================================
+    // 数据摘要表格
+    // =============================================
+    function renderSummaryTable(stats, outlierMethod) {
+        const table = document.getElementById('summary-table');
+        const outlierLabel = outlierMethod === 'none' ? '无' : outlierMethod === 'iqr' ? 'IQR' : 'Z-Score';
+
+        let html = `<thead><tr>
+            <th>基因型</th><th>有效 n</th><th>异常值</th>
+            <th>均值 (Log₁₀)</th><th>SE</th><th>最小值</th><th>最大值</th><th>字母</th>
+        </tr></thead><tbody>`;
+
+        stats.forEach(s => {
+            const oc = s.raw.filter(v => v.isOutlier).length;
+            html += `<tr>
+                <td style="font-weight:600;color:var(--accent);">${s.genotype}</td>
+                <td>${s.validLogs.length}</td>
+                <td class="${oc > 0 ? 'outlier-cell' : ''}">${oc > 0 ? oc + ' (' + outlierLabel + ')' : '0'}</td>
+                <td style="font-weight:600;">${s.mean.toFixed(3)}</td>
+                <td>${s.se.toFixed(3)}</td>
+                <td>${s.validLogs.length > 0 ? Math.min(...s.validLogs).toFixed(2) : '-'}</td>
+                <td>${s.validLogs.length > 0 ? Math.max(...s.validLogs).toFixed(2) : '-'}</td>
+                <td style="font-weight:700;font-size:1.1rem;color:var(--accent);">${s.letter}</td>
+            </tr>`;
+        });
+        html += `</tbody>`;
+        table.innerHTML = html;
+    }
+
+    // =============================================
+    // [新增] ANOVA 结果展示
+    // =============================================
+    function renderANOVATable() {
+        const section = document.getElementById('anova-section');
+        const box = document.getElementById('anova-result-box');
+        const anova = window._lastANOVA;
+
+        if (!anova || stats_count() < 2) { section.style.display = 'none'; return; }
+        section.style.display = 'block';
+
+        const sigColor = anova.significant ? 'var(--green)' : 'var(--red)';
+        const sigText = anova.significant ? '显著 (p < 0.05)' : '不显著 (p ≥ 0.05)';
+        const sigIcon = anova.significant ? '✓' : '✗';
+
+        box.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem;">
+                <div>
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">F 值</span><br>
+                    <span style="font-size: 1.3rem; font-weight: 700; color: var(--text-main);">${anova.F}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">自由度 (df)</span><br>
+                    <span style="font-size: 1.3rem; font-weight: 700; color: var(--text-main);">${anova.df1}, ${anova.df2}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">P 值</span><br>
+                    <span style="font-size: 1.3rem; font-weight: 700; color: ${sigColor};">${anova.pValue}</span>
+                </div>
+                <div>
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">结论</span><br>
+                    <span style="font-size: 1.1rem; font-weight: 700; color: ${sigColor};">${sigIcon} ${sigText}</span>
+                </div>
+            </div>
+            <div style="margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.8rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem;">
+                <span>SSB (组间) = ${anova.SSB}</span>
+                <span>SSW (组内) = ${anova.SSW}</span>
+                <span>MSB = ${anova.MSB}</span>
+                <span>MSW = ${anova.MSW}</span>
+                <span>Grand Mean = ${anova.grandMean}</span>
+                <span>Total N = ${anova.N}</span>
+            </div>
+            ${!anova.significant ? '<p style="margin-top: 0.6rem; color: var(--accent); font-size: 0.85rem;">⚠ ANOVA 整体检验不显著，以下两两比较结果仅供参考，不建议在论文中报告差异显著性字母。</p>' : ''}
+        `;
+    }
+
+    function stats_count() {
+        return window._lastANOVA ? document.querySelectorAll('.entry-section').length : 0;
+    }
+
+    // =============================================
+    // p-value 两两比较矩阵表格
+    // =============================================
+    function renderPValueTable(stats, pMatrix) {
+        const section = document.getElementById('pvalue-section');
+        const table = document.getElementById('pvalue-table');
+
+        if (stats.length <= 1 || !pMatrix) { section.style.display = 'none'; return; }
+        section.style.display = 'block';
+
+        // ANOVA 不显著时更新提示
+        const anova = window._lastANOVA;
+        const noteEl = document.getElementById('pvalue-note');
+        if (anova && !anova.significant) {
+            noteEl.innerHTML = '* <span style="color:var(--accent);">⚠ ANOVA 整体检验不显著，以下两两比较结果仅供参考</span> | 加粗值表示校正后 p < 0.05';
+        } else {
+            noteEl.innerHTML = '* 加粗值表示校正后 p < 0.05（差异显著）';
+        }
+
+        let html = `<thead><tr><th></th>`;
+        stats.forEach(s => { html += `<th>${s.genotype}</th>`; });
+        html += `</tr></thead><tbody>`;
+
+        stats.forEach((s, i) => {
+            html += `<tr><td style="font-weight:600;color:var(--accent);text-align:left;padding-left:1rem;">${s.genotype}</td>`;
+            stats.forEach((_, j) => {
+                if (i === j) {
+                    html += `<td style="background:rgba(99,102,241,0.1);">—</td>`;
+                } else {
+                    const val = pMatrix[i][j];
+                    const isSig = val && val !== '' && (val.startsWith('<') ? true : parseFloat(val) < 0.05);
+                    html += `<td style="${isSig ? 'color:var(--red);font-weight:700;' : ''}">${val || '-'}</td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+        html += `</tbody>`;
+        table.innerHTML = html;
+    }
+
+    // =============================================
+    // SVG 图表生成
+    // =============================================
+    function generateSVG(stats) {
+        const width = 800, height = 450, padding = 60, topPadding = 80;
+        const chartWidth = width - 2 * padding;
+        const axisY = height - padding - 20;
+        const chartHeight = axisY - topPadding;
+
+        let globalMin = Infinity, globalMax = -Infinity;
+        stats.forEach(s => {
+            s.raw.forEach(v => { globalMin = Math.min(globalMin, v.logCfu); globalMax = Math.max(globalMax, v.logCfu); });
+            globalMax = Math.max(globalMax, s.mean + s.se);
+        });
+
+        const scale = niceScale(Math.floor(globalMin) - 0.5, Math.ceil(globalMax) + 0.5);
+        const maxVal = scale.max, minVal = scale.min, yStep = scale.step;
+        const scaleY = (val) => axisY - ((val - minVal) / (maxVal - minVal)) * chartHeight;
+        const barWidth = Math.min(60, chartWidth / (stats.length * 2));
+        const spacing = chartWidth / stats.length;
+
+        const palettes = {
+            indigo: { bg:'#0f172a', bar:'#6366f1', text:'#f8fafc', axis:'#94a3b8', error:'#ffffff', letter:'#f59e0b', point:'#ffffff', pointStroke:'#000', outlier:'#ef4444', outlierStroke:'#7f1d1d' },
+            nature: { bg:'#0f172a', bar:'#10b981', text:'#f8fafc', axis:'#94a3b8', error:'#ffffff', letter:'#f59e0b', point:'#ffffff', pointStroke:'#000', outlier:'#ef4444', outlierStroke:'#7f1d1d' },
+            multi: { bg:'#0f172a', bar:['#ec4899','#8b5cf6','#3b82f6','#10b981','#f59e0b','#ef4444','#06b6d4','#f97316'], text:'#f8fafc', axis:'#94a3b8', error:'#ffffff', letter:'#f8fafc', point:'#ffffff', pointStroke:'#000', outlier:'#737373', outlierStroke:'#171717' },
+            publication: { bg:'#ffffff', bar:'#d1d5db', text:'#000000', axis:'#000000', error:'#000000', letter:'#000000', point:'#ffffff', pointStroke:'#000000', outlier:'#ef4444', outlierStroke:'#000000' },
+            pub_blue: { bg:'#ffffff', bar:'#3b82f6', text:'#000000', axis:'#000000', error:'#000000', letter:'#000000', point:'#ffffff', pointStroke:'#000000', outlier:'#ef4444', outlierStroke:'#000000' },
+            pub_color: { bg:'#ffffff', bar:['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#ffff33','#a65628','#f781bf'], text:'#000000', axis:'#000000', error:'#000000', letter:'#000000', point:'#ffffff', pointStroke:'#000000', outlier:'#999999', outlierStroke:'#000000' }
+        };
+        const p = palettes[document.getElementById('color-scheme').value || 'indigo'];
+        const rng = seededRandom(42);
+
+        let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+            <rect width="${width}" height="${height}" fill="${p.bg}" rx="12" />
+            <text x="${padding-45}" y="${topPadding+chartHeight/2}" fill="${p.text}" transform="rotate(-90,${padding-45},${topPadding+chartHeight/2})" font-size="16" font-weight="600" text-anchor="middle">Log₁₀ (CFU / cm²)</text>
+            <text x="${padding+chartWidth/2}" y="${height-15}" fill="${p.text}" font-size="16" font-weight="600" text-anchor="middle">Genotypes</text>
+            <line x1="${padding}" y1="${axisY}" x2="${width-padding}" y2="${axisY}" stroke="${p.axis}" stroke-width="2" />
+            <line x1="${padding}" y1="${topPadding}" x2="${padding}" y2="${axisY}" stroke="${p.axis}" stroke-width="2" />`;
+
+        for (let val = minVal; val <= maxVal + yStep * 0.01; val += yStep) {
+            const y = scaleY(val);
+            const displayVal = Math.abs(val - Math.round(val)) < 0.001 ? Math.round(val) : val.toFixed(1);
+            svgContent += `<line x1="${padding-5}" y1="${y}" x2="${padding}" y2="${y}" stroke="${p.axis}" stroke-width="1.5" />
+                <line x1="${padding}" y1="${y}" x2="${width-padding}" y2="${y}" stroke="${p.axis}" stroke-opacity="0.1" stroke-dasharray="4 4" />
+                <text x="${padding-10}" y="${y+5}" fill="${p.text}" font-size="13" text-anchor="end" font-family="'Outfit',sans-serif">${displayVal}</text>`;
+        }
+
+        const chartType = document.getElementById('chart-type').value || 'bar';
+
+        // [修复] 小提琴图最大半宽限制为 spacing 的 30%，防止组间重叠
+        const violinMaxHalfWidth = spacing * 0.3;
+
+        stats.forEach((s, i) => {
+            const xCenter = padding + spacing * i + spacing / 2;
+            const yMean = scaleY(s.mean);
+            const yErrorTop = scaleY(s.mean + s.se);
+            const yErrorBottom = scaleY(s.mean - s.se);
+            const barColor = Array.isArray(p.bar) ? p.bar[i % p.bar.length] : p.bar;
+
+            if (chartType === 'bar') {
+                svgContent += `<rect x="${xCenter-barWidth/2}" y="${yMean}" width="${barWidth}" height="${axisY-yMean}" fill="${barColor}" fill-opacity="0.85" rx="6" />`;
+                if (!isNaN(yErrorTop) && !isNaN(yErrorBottom)) {
+                    svgContent += `<line x1="${xCenter}" y1="${yErrorTop}" x2="${xCenter}" y2="${yErrorBottom}" stroke="${p.error}" stroke-width="1.5" />
+                        <line x1="${xCenter-10}" y1="${yErrorTop}" x2="${xCenter+10}" y2="${yErrorTop}" stroke="${p.error}" stroke-width="1.5" />
+                        <line x1="${xCenter-10}" y1="${yErrorBottom}" x2="${xCenter+10}" y2="${yErrorBottom}" stroke="${p.error}" stroke-width="1.5" />`;
+                }
+            } else if (chartType === 'box' && s.validLogs.length > 0) {
+                const yQ1=scaleY(s.q1), yMed=scaleY(s.median), yQ3=scaleY(s.q3), yMin=scaleY(s.min), yMax=scaleY(s.max);
+                svgContent += `<line x1="${xCenter}" y1="${yMin}" x2="${xCenter}" y2="${yQ1}" stroke="${p.text}" stroke-width="1.5" />
+                    <line x1="${xCenter}" y1="${yMax}" x2="${xCenter}" y2="${yQ3}" stroke="${p.text}" stroke-width="1.5" />
+                    <line x1="${xCenter-15}" y1="${yMin}" x2="${xCenter+15}" y2="${yMin}" stroke="${p.text}" stroke-width="1.5" />
+                    <line x1="${xCenter-15}" y1="${yMax}" x2="${xCenter+15}" y2="${yMax}" stroke="${p.text}" stroke-width="1.5" />
+                    <rect x="${xCenter-barWidth/2}" y="${yQ3}" width="${barWidth}" height="${yQ1-yQ3}" fill="${barColor}" fill-opacity="0.85" stroke="${p.text}" stroke-width="1.5" rx="2" />
+                    <line x1="${xCenter-barWidth/2}" y1="${yMed}" x2="${xCenter+barWidth/2}" y2="${yMed}" stroke="${p.text}" stroke-width="2" />`;
+            } else if (chartType === 'violin' && s.validLogs.length > 1) {
+                const kde = getKDE(s.validLogs);
+                const maxD = Math.max(...kde.map(d => d.density));
+
+                // [修复] 使用 SVG path + catmull-rom 样条曲线实现平滑小提琴
+                const leftPoints = kde.map(d => {
+                    const xo = Math.min((d.density / maxD) * (barWidth / 0.8), violinMaxHalfWidth);
+                    return { x: xCenter - xo, y: scaleY(d.v) };
+                });
+                const rightPoints = kde.slice().reverse().map(d => {
+                    const xo = Math.min((d.density / maxD) * (barWidth / 0.8), violinMaxHalfWidth);
+                    return { x: xCenter + xo, y: scaleY(d.v) };
+                });
+                const allPoints = [...leftPoints, ...rightPoints];
+
+                // 生成平滑 catmull-rom path
+                const pathD = smoothPath(allPoints, true);
+                svgContent += `<path d="${pathD}" fill="${barColor}" fill-opacity="0.7" stroke="${p.text}" stroke-width="1" />
+                    <line x1="${xCenter}" y1="${scaleY(s.min)}" x2="${xCenter}" y2="${scaleY(s.max)}" stroke="${p.text}" stroke-width="2" />
+                    <rect x="${xCenter-4}" y="${scaleY(s.q3)}" width="8" height="${scaleY(s.q1)-scaleY(s.q3)}" fill="${p.text}" rx="1" />
+                    <circle cx="${xCenter}" cy="${scaleY(s.median)}" r="3" fill="${p.letter}" />`;
+            }
+
+            // [修复] 根据图表类型动态计算字母 Y 坐标，避免被图形遮盖或超出图表
+            let letterY;
+            if (chartType === 'box' && s.validLogs.length > 0) {
+                letterY = scaleY(s.max) - 30;
+            } else if (chartType === 'violin' && s.validLogs.length > 1) {
+                letterY = scaleY(s.max) - 30;
+            } else {
+                letterY = isNaN(yErrorTop) ? yMean - 30 : yErrorTop - 30;
+            }
+            // 确保字母不会超出图表顶部
+            letterY = Math.max(letterY, topPadding + 10);
+            svgContent += `<text x="${xCenter}" y="${letterY}" fill="${p.letter}" font-size="16" text-anchor="middle" font-weight="700">${s.letter}</text>`;
+
+            s.raw.forEach(v => {
+                const jitter = (rng() - 0.5) * 20;
+                const pc = v.isOutlier ? p.outlier : p.point;
+                const op = v.isOutlier ? '0.4' : '0.8';
+                const st = v.isOutlier ? p.outlierStroke : p.pointStroke;
+                svgContent += `<circle cx="${xCenter+jitter}" cy="${scaleY(v.logCfu)}" r="5" fill="${pc}" fill-opacity="${op}" stroke="${st}" stroke-width="1" />`;
+            });
+
+            svgContent += `<text x="${xCenter}" y="${height-padding}" fill="${p.text}" font-size="14" text-anchor="middle" font-weight="600" font-family="'Outfit',sans-serif">${s.genotype}</text>`;
+        });
+
+        if (document.getElementById('outlier-method').value !== 'none') {
+            svgContent += `<circle cx="${width-padding-100}" cy="${topPadding-20}" r="5" fill="${p.outlier}" fill-opacity="0.4" stroke="${p.outlierStroke}" stroke-width="1" />
+                <text x="${width-padding-85}" y="${topPadding-16}" fill="${p.text}" font-size="12">被剔除的异常值</text>`;
+        }
+
+        svgContent += `</svg>`;
+        document.getElementById('plot-area').innerHTML = svgContent;
+
+        // SVG 下载
+        document.getElementById('download-svg-btn').onclick = () => {
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${getExperimentName()}_Plot_${formatDateForFilename()}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+            document.getElementById('export-menu').classList.remove('show');
+            showToast('SVG 图表已保存', 'success');
+        };
+
+        // [新增] PNG 下载 (300dpi)
+        document.getElementById('download-png-btn').onclick = () => {
+            const scale = 3; // 3x for ~300dpi at 800px → 2400px
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+
+            const img = new Image();
+            const svgBlob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, width, height);
+                URL.revokeObjectURL(url);
+                canvas.toBlob((blob) => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `${getExperimentName()}_Plot_${formatDateForFilename()}.png`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    document.getElementById('export-menu').classList.remove('show');
+                    showToast('PNG 图表已保存 (300dpi)', 'success');
+                }, 'image/png');
+            };
+            img.src = url;
+        };
+    }
+
+    // =============================================
+    // [新增] Catmull-Rom 样条曲线 → SVG cubic bezier path
+    // =============================================
+    function smoothPath(points, closed) {
+        if (points.length < 2) return '';
+        if (points.length === 2) return `M${points[0].x},${points[0].y} L${points[1].x},${points[1].y}`;
+
+        const tension = 0.5;
+        let path = `M${points[0].x},${points[0].y}`;
+
+        const n = points.length;
+        for (let i = 0; i < n - 1; i++) {
+            const p0 = points[i === 0 ? (closed ? n - 1 : 0) : i - 1];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[i + 2 >= n ? (closed ? (i + 2) % n : n - 1) : i + 2];
+
+            const cp1x = p1.x + (p2.x - p0.x) * tension / 3;
+            const cp1y = p1.y + (p2.y - p0.y) * tension / 3;
+            const cp2x = p2.x - (p3.x - p1.x) * tension / 3;
+            const cp2y = p2.y - (p3.y - p1.y) * tension / 3;
+
+            path += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+        }
+
+        if (closed) path += ' Z';
+        return path;
+    }
+
+    function getKDE(data) {
+        const n = data.length;
+        const std = jStat.stdev(data, true);
+        // [修复] 增加带宽使曲线更平滑
+        const h = 1.06 * std * Math.pow(n, -0.2) || 0.1;
+        const min = Math.min(...data) - 1.5, max = Math.max(...data) + 1.5;
+        const result = [];
+        // [修复] 增加采样点到 80 个，使曲线更细腻
+        for (let i = 0; i <= 80; i++) {
+            const v = min + (max - min) * (i / 80);
+            let density = 0;
+            data.forEach(x => { const u = (v - x) / h; density += Math.exp(-0.5 * u * u) / Math.sqrt(2 * Math.PI); });
+            result.push({ v, density: density / (n * h) });
+        }
+        return result;
+    }
+
+    // CSV Import — 仅支持新版格式 (Dilution_Exponent, Dilution_Factor, Colony_Count)
+    document.getElementById('csv-file-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const text = event.target.result;
+            // 跳过注释行 (#) 和空行
+            const lines = text.split(/\r?\n/).filter(line => {
+                const t = line.trim();
+                return t !== '' && !t.startsWith('#');
+            });
+            if (lines.length <= 1) { showToast('无效的 CSV 文件', 'error'); return; }
+
+            const headerStr = lines[0].toLowerCase();
+            if (!headerStr.includes('genotype') || !headerStr.includes('dilution_exponent')) {
+                showToast('CSV 格式不匹配，请使用本工具导出的新版 CSV 文件', 'error'); return;
+            }
+
+            const separator = lines[0].includes(';') ? ';' : ',';
+            const headers = lines[0].split(separator).map(h => h.trim().toLowerCase());
+
+            const colGenotype = headers.indexOf('genotype');
+            const colRep = headers.indexOf('rep');
+            const colDilution = headers.indexOf('dilution_exponent');
+            const colCount = headers.indexOf('colony_count');
+
+            const parsedData = {};
+
+            // 只解析原始数据 section，遇到非数据行自动停止
+            for (let i = 1; i < lines.length; i++) {
+                const parts = lines[i].split(separator).map(p => p.trim().replace(/^["']|["']$/g, ''));
+                if (parts.length < 4) continue;
+
+                const genotype = parts[colGenotype];
+                const repStr = parts[colRep];
+                const dilutionStr = parts[colDilution];
+                const countStr = parts[colCount];
+
+                if (!genotype || !countStr) continue;
+
+                // Rep 列不是 "Rep N" 格式说明进入了其他 section，停止解析
+                if (!/^rep\s*\d+$/i.test(repStr)) break;
+
+                if (!parsedData[genotype]) parsedData[genotype] = [];
+                parsedData[genotype].push({ rep: repStr, dil: parseInt(dilutionStr) || 0, count: countStr });
+            }
+
+            document.getElementById('data-entries').querySelectorAll('.entry-section').forEach(el => el.remove());
+
+            for (const [genotype, items] of Object.entries(parsedData)) {
+                const uniqueReps = [...new Set(items.map(i => i.rep))];
+                const latestSection = addGenotypeEntry(genotype, uniqueReps.length);
+                const rows = latestSection.querySelectorAll('tbody tr');
+                items.forEach(item => {
+                    let rowIndex = uniqueReps.indexOf(item.rep);
+                    if (rowIndex >= 0 && rowIndex < rows.length) {
+                        const input = rows[rowIndex].querySelector(`.dilution-input[data-dil="${item.dil}"]`);
+                        if (input && item.count !== "null" && item.count !== "NaN" && item.count !== "") input.value = item.count;
+                    }
+                });
+            }
+
+            lucide.createIcons();
+            showToast(`成功导入 ${Object.keys(parsedData).length} 个组别的数据`, 'success');
+            setTimeout(() => { document.getElementById('calculate-btn')?.click(); }, 100);
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    });
+
+    // =============================================
+    // 初始化：设置自动保存，但不自动恢复
+    // =============================================
+    setupAutoSave();
+
+    // 检查是否有可恢复的数据，显示提示
+    (function checkSavedData() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data.entries && data.entries.length > 0) {
+                    const indicator = document.getElementById('autosave-indicator');
+                    indicator.innerHTML = `<span class="dot" style="background: var(--accent);"></span> 检测到上次保存的数据 (${data.entries.length} 个组别) <button onclick="restoreFromLocalStorage(); this.parentElement.remove();" style="margin-left: 0.5rem; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid var(--primary); background: var(--primary); color: white; cursor: pointer; font-size: 0.75rem;">恢复数据</button> <button onclick="localStorage.removeItem('${STORAGE_KEY}'); this.parentElement.remove(); showToast('已清除保存的数据', 'info');" style="margin-left: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid var(--red); background: transparent; color: var(--red); cursor: pointer; font-size: 0.75rem;">清除记录</button>`;
+                    indicator.classList.add('visible');
+                    indicator.style.opacity = '1';
+                }
+            }
+        } catch(e) {}
+    })();
+</script>
+
+</body>
+</html>
